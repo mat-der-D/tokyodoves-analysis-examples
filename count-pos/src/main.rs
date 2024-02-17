@@ -10,37 +10,22 @@ fn count_equivalents(bits: u16) -> usize {
 }
 
 fn is_on_line(bits: u16) -> bool {
-    let h = 0x000f;
-    for i in 0..4 {
-        let mask = h << (i * 4);
-        if (bits & mask) == bits {
-            return true;
+    fn _shift(x: u16, n: i16) -> u16 {
+        if n > 0 {
+            x << (n * 4)
+        } else {
+            x >> (-n * 4)
         }
     }
 
-    let v = 0x1111;
-    for i in 0..4 {
-        let mask = v << i;
-        if (bits & mask) == bits {
-            return true;
-        }
-    }
-
-    let d1 = 0x1248;
-    let d2 = 0x8421;
-    for i in 0..4 {
-        for d in [d1, d2] {
-            let mask = d << (i * 4);
-            if (bits & mask) == bits {
-                return true;
-            }
-            let mask = d >> (i * 4);
-            if (bits & mask) == bits {
-                return true;
-            }
-        }
-    }
-    false
+    let hs = (0..4).map(|i| 0x000f << (i * 4)); // 横一列
+    let vs = (0..4).map(|i| 0x1111 << i); // 縦一列
+    let ds1 = (-3..=3).map(|i| _shift(0x1248, i)); // ／ の一列
+    let ds2 = (-3..=3).map(|i| _shift(0x8421, i)); // ＼ の一列
+    hs.chain(vs)
+        .chain(ds1)
+        .chain(ds2)
+        .any(|mask| bits & mask == bits)
 }
 
 fn perm(n: usize, r: usize) -> usize {
@@ -65,7 +50,7 @@ fn count_positions(
         let num_doves = arr.count_ones() as usize;
         let num_surrounded = extract_surrounded(arr).count_ones() as usize;
         let num_not_surrounded = num_doves - num_surrounded;
-        // let invariant = perm(num_doves, 2) * perm(10, num_doves - 2);
+
         let mut invariant = 0;
         if include_free && num_not_surrounded >= 2 {
             invariant += perm(num_not_surrounded, 2) * perm(10, num_doves - 2);
@@ -92,7 +77,11 @@ fn count_positions(
 }
 
 fn main() {
-    let count = count_positions(false, false, true);
+    let count = count_positions(
+        true, // いずれのボスハトも囲まれていないケース
+        true, // 一方のボスハトのみが囲まれているケース
+        true, // 両方のボスハトが囲まれているケース
+    );
     let mut total = 0;
     for n in 2..=12 {
         let each_count = *count.get(&n).unwrap();

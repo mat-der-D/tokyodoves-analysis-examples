@@ -88,31 +88,26 @@ fn gather_checkmates(boss_bit: u16, mut other_bits: u16) -> BoardSet {
     checkmates
 }
 
-fn create_checkmates_map(show_progress: bool) -> HashMap<usize, BoardSet> {
+fn create_checkmates_map_from_arrangements<F: Fn(&str)>(
+    arr_slice: &[u16],
+    logger: F,
+) -> HashMap<usize, BoardSet> {
     let mut checkmates_map = HashMap::new();
     for n in 2..=12 {
         checkmates_map.insert(n, BoardSet::new());
     }
 
-    let arr_vec = gather_canonical_arrangements();
-    let num_arr = arr_vec.len();
-    for (i, arr) in arr_vec.into_iter().enumerate() {
-        if show_progress {
-            println!(
-                "{} / {} ({:.2} %)",
-                i + 1,
-                num_arr,
-                (i as f32) / (num_arr as f32) * 100f32
-            );
-        }
-        if arr.count_ones() > 8 {
-            continue;
-        }
+    for (i, &arr) in arr_slice.iter().enumerate() {
+        logger(&format!(
+            "{:>3} / {:>3} ({:>6.2} %)",
+            i + 1,
+            arr_slice.len(),
+            ((i + 1) as f32) / (arr_slice.len() as f32) * 100f32
+        ));
 
         let checkmates_set = checkmates_map
             .get_mut(&(arr.count_ones() as usize))
             .unwrap();
-
         let sur = extract_surrounded(arr);
         let free = arr & !sur;
         for boss in HotBitIter::new(free) {
@@ -126,16 +121,58 @@ fn create_checkmates_map(show_progress: bool) -> HashMap<usize, BoardSet> {
     checkmates_map
 }
 
-fn main() -> anyhow::Result<()> {
-    let checkmates_map = create_checkmates_map(true);
+fn create_checkmates_map(num_thread: usize, show_progress: bool) -> HashMap<usize, BoardSet> {
+    let mut checkmates_map: HashMap<usize, BoardSet> =
+        (2..=12).map(|n| (n, BoardSet::new())).collect();
+    let arr_vec = gather_canonical_arrangements();
+
+    let mut handlers = Vec::with_capacity(num_thread);
+    for th in 0..num_thread {
+        let arr_vec_part: Vec<u16> = arr_vec
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % num_thread == th)
+            .map(|(_, &arr)| arr)
+            .collect();
+        let logger = move |msg: &str| {
+            if show_progress {
+                println!("[Thread {th:<2}] {msg}")
+            }
+        };
+        handlers.push(std::thread::spawn(move || {
+            create_checkmates_map_from_arrangements(&arr_vec_part, logger)
+        }));
+    }
+
+    for handler in handlers {
+        let result_map = handler.join().unwrap();
+        for (n, board_set) in result_map {
+            checkmates_map.get_mut(&n).unwrap().absorb(board_set);
+        }
+    }
+
+    checkmates_map
+}
+
+fn main() {
+    let num_thread = 16; // 並列計算を行うスレッド数; 計算環境に合わせて設定
+    let checkmates_map = create_checkmates_map(num_thread, true);
     let mut total_count = 0;
     for n in 2..=12 {
         let checkmates_set = checkmates_map.get(&n).unwrap();
+
+        // ファイルに保存する場合は, 以下を実行する:
+        // let path = std::path::PathBuf::from(format!("/replace/it/by/some/path_{n:0>2}.tdl"));
+        // let file = std::fs::File::create(&path)
+        //     .expect(format!("Failed to create file: {:?}", path).as_str());
+        // let writer = std::io::BufWriter::new(file);
+        // checkmates_set.save(writer).expect("Failed to save");
+
         println!("{}: {}", n, checkmates_set.len());
         total_count += checkmates_set.len();
     }
-    println!("total: {}", total_count);
-    Ok(())
+    println!("---------------");
+    println!("Total: {}", total_count);
 }
 
 #[cfg(test)]

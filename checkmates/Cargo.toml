@@ -10,7 +10,6 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-anyhow = "1.0.79"
 tokyodoves = { version = "1.0.2", features = ["analysis"] }
 common-lib = { path = "../common-lib" }
 itertools = "0.12.1"

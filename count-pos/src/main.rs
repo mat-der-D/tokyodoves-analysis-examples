@@ -41,10 +41,7 @@ fn count_positions(
     include_one_surrounded: bool,
     include_both_surrounded: bool,
 ) -> HashMap<usize, usize> {
-    let mut total_invariants = HashMap::new();
-    for n in 2..=12 {
-        total_invariants.insert(n, 0);
-    }
+    let mut total_invariants: HashMap<usize, usize> = (2..=12).map(|n| (n, 0)).collect();
 
     for arr in gather_canonical_arrangements() {
         let num_doves = arr.count_ones() as usize;

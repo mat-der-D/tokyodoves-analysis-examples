@@ -32,7 +32,7 @@ impl Iterator for HotBitIter {
     }
 }
 
-fn find_minimal_rectangle(bits: u16) -> Option<Rectangle> {
+pub fn find_minimal_rectangle(bits: u16) -> Option<Rectangle> {
     if bits == 0 {
         return None;
     }

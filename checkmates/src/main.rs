@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use common_lib::{
     calc_liberty, extract_surrounded, gather_canonical_arrangements, is_isolated, HotBitIter,
     D_WALL, L_WALL, R_WALL, U_WALL,
@@ -5,11 +7,9 @@ use common_lib::{
 use itertools::{iproduct, Itertools};
 use tokyodoves::{
     analysis::{compare_board_value, BoardValue},
-    // collections::BoardSet,
+    collections::BoardSet,
     game::GameRule,
-    Board,
-    BoardBuilder,
-    Color,
+    Board, BoardBuilder, Color,
 };
 
 fn make_space_if_possible(mut piece_bit: u16, mut all_bits: u16) -> (u16, u16) {
@@ -62,40 +62,11 @@ fn is_checkmate(board: Board) -> bool {
     )
 }
 
-// fn gather_checkmates(boss_bit: u16, mut other_bits: u16) -> BoardSet {
-//     other_bits &= !boss_bit; // 防御
-//     let mut checkmates = BoardSet::new();
-//     let sur = extract_surrounded(boss_bit | other_bits);
-//     let other_boss_candidates = other_bits & !sur;
-//     for other_boss_bit in HotBitIter::new(other_boss_candidates) {
-//         let not_boss_bits = other_bits & !other_boss_bit;
-//         let pos_vec: Vec<u16> = HotBitIter::new(not_boss_bits).collect();
-
-//         let pos_bosses = [[boss_bit, 0, 0, 0, 0, 0], [other_boss_bit, 0, 0, 0, 0, 0]];
-//         for cd_vec in iproduct!(0..2, 1..6).permutations(pos_vec.len()) {
-//             let mut positions = pos_bosses;
-//             for ((color, dove), &pos) in cd_vec.into_iter().zip(pos_vec.iter()) {
-//                 positions[color][dove] = pos;
-//             }
-//             let board = BoardBuilder::from_u16_bits(positions)
-//                 .build()
-//                 .expect("invalid board");
-//             if is_checkmate(board) {
-//                 checkmates
-//                     .raw_mut()
-//                     .insert(board.to_invariant_u64(Color::Red));
-//             }
-//         }
-//     }
-//     checkmates
-// }
-
-fn count_checkmates(boss_bit: u16, mut other_bits: u16) -> usize {
+fn gather_checkmates(boss_bit: u16, mut other_bits: u16) -> BoardSet {
     other_bits &= !boss_bit; // 防御
-    let mut num_checkmates = 0;
+    let mut checkmates = BoardSet::new();
     let sur = extract_surrounded(boss_bit | other_bits);
     let other_boss_candidates = other_bits & !sur;
-
     for other_boss_bit in HotBitIter::new(other_boss_candidates) {
         let not_boss_bits = other_bits & !other_boss_bit;
         let pos_vec: Vec<u16> = HotBitIter::new(not_boss_bits).collect();
@@ -106,31 +77,41 @@ fn count_checkmates(boss_bit: u16, mut other_bits: u16) -> usize {
             for ((color, dove), &pos) in cd_vec.into_iter().zip(pos_vec.iter()) {
                 positions[color][dove] = pos;
             }
-            let board = BoardBuilder::from_u16_bits(positions)
-                .build()
-                .expect("invalid board");
+            let board = BoardBuilder::from_u16_bits(positions).build_unchecked();
             if is_checkmate(board) {
-                num_checkmates += 1;
+                checkmates
+                    .raw_mut()
+                    .insert(board.to_invariant_u64(Color::Red));
             }
         }
     }
-    num_checkmates
+    checkmates
 }
 
-fn main() -> anyhow::Result<()> {
-    let mut total_checkmates = 0;
+fn create_checkmates_map(show_progress: bool) -> HashMap<usize, BoardSet> {
+    let mut checkmates_map = HashMap::new();
+    for n in 2..=12 {
+        checkmates_map.insert(n, BoardSet::new());
+    }
+
     let arr_vec = gather_canonical_arrangements();
     let num_arr = arr_vec.len();
     for (i, arr) in arr_vec.into_iter().enumerate() {
-        println!(
-            "{} / {} ({:.2} %)",
-            i,
-            num_arr,
-            (i as f32) / (num_arr as f32) * 100f32
-        );
-        if arr.count_ones() != 7 {
+        if show_progress {
+            println!(
+                "{} / {} ({:.2} %)",
+                i + 1,
+                num_arr,
+                (i as f32) / (num_arr as f32) * 100f32
+            );
+        }
+        if arr.count_ones() > 8 {
             continue;
         }
+
+        let checkmates_set = checkmates_map
+            .get_mut(&(arr.count_ones() as usize))
+            .unwrap();
 
         let sur = extract_surrounded(arr);
         let free = arr & !sur;
@@ -139,13 +120,21 @@ fn main() -> anyhow::Result<()> {
             if !may_be_checkmate(boss_bit, all_bits) {
                 continue;
             }
-            // let checkmates = gather_checkmates(boss_bit, all_bits & !boss_bit);
-            // total_checkmates += checkmates.len();
-            total_checkmates += count_checkmates(boss_bit, all_bits & !boss_bit);
-            println!("--> current total_checkmates: {}", total_checkmates)
+            checkmates_set.absorb(gather_checkmates(boss_bit, all_bits & !boss_bit));
         }
     }
-    println!("total_checkmates: {}", total_checkmates);
+    checkmates_map
+}
+
+fn main() -> anyhow::Result<()> {
+    let checkmates_map = create_checkmates_map(true);
+    let mut total_count = 0;
+    for n in 2..=12 {
+        let checkmates_set = checkmates_map.get(&n).unwrap();
+        println!("{}: {}", n, checkmates_set.len());
+        total_count += checkmates_set.len();
+    }
+    println!("total: {}", total_count);
     Ok(())
 }
 

@@ -65,13 +65,19 @@ fn gather_win1(other_boss_bit: u16, mut all_bits: u16) -> BoardSet {
     win1_set
 }
 
-fn count_win1() -> HashMap<usize, usize> {
-    let mut total_win1_map: HashMap<usize, usize> = (2..=12).map(|n| (n, 0)).collect();
+fn count_win1_from_arrangements<F: Fn(&str)>(
+    arr_slice: &[u16],
+    logger: F,
+) -> HashMap<usize, usize> {
+    let mut count: HashMap<usize, usize> = (2..=12).map(|n| (n, 0)).collect();
 
-    for arr in gather_canonical_arrangements() {
-        if arr.count_ones() >= 7 {
-            continue;
-        }
+    for (i, &arr) in arr_slice.iter().enumerate() {
+        logger(&format!(
+            "{:>4} / {:>4} ({:>6.2}%)",
+            i,
+            arr_slice.len(),
+            (i as f32) / (arr_slice.len() as f32) * 100f32
+        ));
         let mut pool = BoardSet::new();
         let sur = extract_surrounded(arr);
         let free = arr & !sur;
@@ -83,15 +89,49 @@ fn count_win1() -> HashMap<usize, usize> {
         }
 
         let num_doves = arr.count_ones() as usize;
-        let count = total_win1_map.get_mut(&num_doves).unwrap();
-        *count += pool.len();
+        *count.get_mut(&num_doves).unwrap() += pool.len();
+    }
+    count
+}
+
+fn count_win1(num_thread: usize, show_progress: bool) -> HashMap<usize, usize> {
+    let mut total_win1_map: HashMap<usize, usize> = (2..=12).map(|n| (n, 0)).collect();
+
+    let arr_vec = gather_canonical_arrangements();
+
+    let mut handlers = Vec::with_capacity(num_thread);
+    for th in 0..num_thread {
+        let arr_vec_part: Vec<u16> = arr_vec
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % num_thread == th)
+            .map(|(_, &arr)| arr)
+            .collect();
+
+        let logger = move |s: &str| {
+            if show_progress {
+                println!("[Thread {th:<2}] {s}");
+            }
+        };
+
+        handlers.push(std::thread::spawn(move || {
+            count_win1_from_arrangements(&arr_vec_part, logger)
+        }));
+    }
+
+    for handler in handlers {
+        let count = handler.join().unwrap();
+        for (n, cnt) in count.iter() {
+            *total_win1_map.get_mut(n).unwrap() += cnt;
+        }
     }
 
     total_win1_map
 }
 
 fn main() {
-    let count = count_win1();
+    let num_thread = 16;
+    let count = count_win1(num_thread, true);
     for n in 2..=12 {
         if let Some(c) = count.get(&n) {
             println!("{}: {}", n, c);

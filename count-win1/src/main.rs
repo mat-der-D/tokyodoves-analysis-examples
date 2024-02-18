@@ -55,7 +55,6 @@ fn gather_win1(other_boss_bit: u16, mut all_bits: u16) -> BoardSet {
             }
             let board = BoardBuilder::from_u16_bits(positions).build_unchecked();
             if is_win1(board) {
-                // win1_set.insert(board);
                 win1_set
                     .raw_mut()
                     .insert(board.to_invariant_u64(Color::Red));

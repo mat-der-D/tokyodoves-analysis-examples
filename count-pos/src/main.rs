@@ -85,9 +85,10 @@ fn main() {
     let mut total = 0;
     for n in 2..=12 {
         let each_count = *count.get(&n).unwrap();
-        println!("{n}: {each_count}");
+        println!("{n:>2}: {each_count}");
         total += each_count;
     }
+    println!("---------------");
     println!("Total: {total}");
 }
 

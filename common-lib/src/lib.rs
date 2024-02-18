@@ -1,6 +1,11 @@
 use tokyodoves::analysis::PositionMapper;
 use tokyodoves::Rectangle;
 
+const U_WALL: u16 = 0xf000;
+const D_WALL: u16 = 0x000f;
+const L_WALL: u16 = 0x8888;
+const R_WALL: u16 = 0x1111;
+
 #[derive(Debug, Clone)]
 pub struct HotBitIter {
     bits: u16,
@@ -83,26 +88,35 @@ fn canonicalize(bits: u16) -> u16 {
     gather_equivalents(bits).iter().copied().min().unwrap()
 }
 
-pub fn extract_surrounded(bits: u16) -> u16 {
-    let Some(rect) = find_minimal_rectangle(bits) else {
-        return 0;
-    };
-    let rect_size = rect.size();
-    let (u_wall, d_wall) = if rect_size.vsize == 4 {
-        (0xf000, 0x000f)
+fn shift_udlr(bits: u16) -> (u16, u16, u16, u16) {
+    fn ud_walls_exist(bits: u16) -> bool {
+        (bits & U_WALL) != 0 && (bits & D_WALL) != 0
+    }
+
+    fn lr_walls_exist(bits: u16) -> bool {
+        (bits & L_WALL) != 0 && (bits & R_WALL) != 0
+    }
+
+    let (u_wall, d_wall) = if ud_walls_exist(bits) {
+        (U_WALL, D_WALL)
     } else {
-        (0x0000, 0x0000)
+        (0, 0)
     };
-    let (l_wall, r_wall) = if rect_size.hsize == 4 {
-        (0x8888, 0x1111)
+    let (l_wall, r_wall) = if lr_walls_exist(bits) {
+        (L_WALL, R_WALL)
     } else {
-        (0x0000, 0x0000)
+        (0, 0)
     };
 
     let u_shifted = (bits << 4) | d_wall;
     let d_shifted = (bits >> 4) | u_wall;
     let l_shifted = ((bits & 0x7777) << 1) | r_wall;
     let r_shifted = ((bits & 0xeeee) >> 1) | l_wall;
+    (u_shifted, d_shifted, l_shifted, r_shifted)
+}
+
+pub fn extract_surrounded(bits: u16) -> u16 {
+    let (u_shifted, d_shifted, l_shifted, r_shifted) = shift_udlr(bits);
     bits & u_shifted & d_shifted & l_shifted & r_shifted
 }
 
@@ -137,16 +151,6 @@ pub fn gather_canonical_arrangements() -> Vec<u16> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
-
-    // fn print_bits(bits: u16) {
-    //     for v in 0..4 {
-    //         for h in 0..4 {
-    //             let bit = 1 << (v * 4 + h);
-    //             print!("{}", if bits & bit != 0 { "1" } else { "0" });
-    //         }
-    //         println!();
-    //     }
-    // }
 
     #[test]
     fn test_canonicalize() {

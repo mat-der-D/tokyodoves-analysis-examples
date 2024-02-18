@@ -1,10 +1,10 @@
 use tokyodoves::analysis::PositionMapper;
 use tokyodoves::Rectangle;
 
-const U_WALL: u16 = 0xf000;
-const D_WALL: u16 = 0x000f;
-const L_WALL: u16 = 0x8888;
-const R_WALL: u16 = 0x1111;
+pub const U_WALL: u16 = 0xf000;
+pub const D_WALL: u16 = 0x000f;
+pub const L_WALL: u16 = 0x8888;
+pub const R_WALL: u16 = 0x1111;
 
 #[derive(Debug, Clone)]
 pub struct HotBitIter {
@@ -120,7 +120,15 @@ pub fn extract_surrounded(bits: u16) -> u16 {
     bits & u_shifted & d_shifted & l_shifted & r_shifted
 }
 
-fn is_isolated(bits: u16) -> bool {
+pub fn calc_liberty(piece_bit: u16, all_bits: u16) -> usize {
+    let (u_shifted, d_shifted, l_shifted, r_shifted) = shift_udlr(all_bits);
+    [u_shifted, d_shifted, l_shifted, r_shifted]
+        .into_iter()
+        .filter(|&shifted| piece_bit & shifted == 0)
+        .count()
+}
+
+pub fn is_isolated(bits: u16) -> bool {
     let u = bits << 4;
     let d = bits >> 4;
     let u_c_d = u | bits | d;
@@ -182,5 +190,13 @@ mod tests {
     fn test_gather_canonical_arrangements() {
         let canonicals = gather_canonical_arrangements();
         assert_eq!(canonicals.len(), 5171);
+    }
+
+    #[test]
+    fn test_calc_liberty() {
+        let piece_bit = 0b0010_0000_0000;
+        let all_bits = 0b0011_0100_1101;
+        let liberty = calc_liberty(piece_bit, all_bits);
+        assert_eq!(liberty, 3);
     }
 }

@@ -1,5 +1,5 @@
 use itertools::{iproduct, Itertools};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use common_lib::{
     calc_liberty, extract_surrounded, find_minimal_rectangle, gather_canonical_arrangements,
@@ -7,7 +7,6 @@ use common_lib::{
 };
 use tokyodoves::{
     analysis::{compare_board_value, BoardValue},
-    collections::BoardSet,
     game::GameRule,
     Board, BoardBuilder, Color,
 };
@@ -37,8 +36,8 @@ fn is_win1(board: Board) -> bool {
     )
 }
 
-fn gather_win1(other_boss_bit: u16, mut all_bits: u16) -> BoardSet {
-    let mut win1_set = BoardSet::new();
+fn gather_win1(other_boss_bit: u16, mut all_bits: u16) -> HashSet<u64> {
+    let mut win1_set = HashSet::new();
 
     all_bits |= other_boss_bit; // 防御
     let sur = extract_surrounded(all_bits);
@@ -55,9 +54,7 @@ fn gather_win1(other_boss_bit: u16, mut all_bits: u16) -> BoardSet {
             }
             let board = BoardBuilder::from_u16_bits(positions).build_unchecked();
             if is_win1(board) {
-                win1_set
-                    .raw_mut()
-                    .insert(board.to_invariant_u64(Color::Red));
+                win1_set.insert(board.to_invariant_u64(Color::Red));
             }
         }
     }
@@ -73,18 +70,19 @@ fn count_win1_from_arrangements<F: Fn(&str)>(
     for (i, &arr) in arr_slice.iter().enumerate() {
         logger(&format!(
             "{:>4} / {:>4} ({:>6.2}%)",
-            i,
+            i + 1,
             arr_slice.len(),
-            (i as f32) / (arr_slice.len() as f32) * 100f32
+            ((i + 1) as f32) / (arr_slice.len() as f32) * 100f32
         ));
-        let mut pool = BoardSet::new();
+        // let mut pool = BoardSet::new();
+        let mut pool = HashSet::new();
         let sur = extract_surrounded(arr);
         let free = arr & !sur;
         for other_boss_bit in HotBitIter::new(free) {
             if !may_be_win1(other_boss_bit, arr) {
                 continue;
             }
-            pool.absorb(gather_win1(other_boss_bit, arr));
+            pool.extend(gather_win1(other_boss_bit, arr));
         }
 
         let num_doves = arr.count_ones() as usize;
@@ -131,9 +129,12 @@ fn count_win1(num_thread: usize, show_progress: bool) -> HashMap<usize, usize> {
 fn main() {
     let num_thread = 16;
     let count = count_win1(num_thread, true);
+    let mut total = 0;
     for n in 2..=12 {
-        if let Some(c) = count.get(&n) {
-            println!("{}: {}", n, c);
-        }
+        let c = count[&n];
+        total += c;
+        println!("{n:>2}: {c}");
     }
+    println!("---------------");
+    println!("Total: {total}");
 }
